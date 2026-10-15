@@ -7,7 +7,7 @@
 
 Book a table, ask about opening hours, check whether a shop has something in stock. Your AI (or any script) hands over a short brief; a voice model makes the call in natural Taiwanese Mandarin; you get the transcript and the recording back.
 
-It runs on top of **landline-hub** (sister repository), which owns the phone line. Voice model: Gemini Live.
+It runs on top of [landline-hub](https://github.com/luna61ouo/landline-hub), which owns the phone line. Voice model: Gemini Live.
 
 ## How it works
 
@@ -61,14 +61,14 @@ Phones paired with landline-hub are telephones: they can dial anything a normal 
 
 ## What you need
 
-- A running **landline-hub** (sister repository) (or its fake gateway, for trying things out).
+- A running [landline-hub](https://github.com/luna61ouo/landline-hub) (or its fake gateway, for trying things out).
 - Python 3.11+.
 - A Gemini API key with access to a Live (native audio) model.
 
 ## Install
 
 ```bash
-git clone <this repository> landline-agent && cd landline-agent
+git clone https://github.com/luna61ouo/landline-agent && cd landline-agent
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e .
 cp config.example.toml config.toml           # set [principal].name, [hub].url, [voice]
