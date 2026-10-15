@@ -1,0 +1,5 @@
+bot_token_file = "discord-bot-token"
+approver_user_id = 0
+approver_socket = "../../data/approver.sock"
+approver_token_file = "../../data/approver-token"
+language = "zh-TW"
