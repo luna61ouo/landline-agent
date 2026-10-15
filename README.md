@@ -4,9 +4,7 @@
 
 **Let an AI make phone calls for you through your own landline – and you press the button that lets it dial.**
 
-[![Intro (first 10 seconds)](docs/media/preview.gif)](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)
-
-▶ **[Watch the 30-second intro with sound](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)** (MP4, 5 MB)
+https://github.com/user-attachments/assets/831f0381-d4d5-4351-94d7-0005849f6a20
 
 > 📞 **Only need the phone system, no AI?** Use [landline-hub](https://github.com/luna61ouo/landline-hub) on its own: calls to your landline ring your mobile, an auto-attendant routes extensions to your team, and you can dial out through the landline from your phone.
 

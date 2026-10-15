@@ -4,9 +4,7 @@
 
 **讓 AI 用你家的市話幫你打電話；要不要撥，由你按。**
 
-[![介紹影片（前 10 秒）](docs/media/preview.gif)](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)
-
-▶ **[看 30 秒介紹影片（有聲音）](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)**（MP4，5 MB）
+https://github.com/user-attachments/assets/831f0381-d4d5-4351-94d7-0005849f6a20
 
 > 📞 **只需要電話系統、不需要 AI？** 單獨用 [landline-hub](https://github.com/luna61ouo/landline-hub) 就好：市話來電響到手機、總機把分機轉給同事、用手機透過市話撥出。
 
