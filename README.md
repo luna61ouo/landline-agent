@@ -162,6 +162,10 @@ python tools/noise_sim.py config.toml brief.md --noise crowd.wav --callee clerk.
 
 `noise_sim.py` plays the callee with a second voice model and mixes in a noise file (8 kHz mono), in real time against the real Gemini API.
 
+## Authors
+
+Luke Liu & Luna Liu
+
 ## License
 
-MIT
+MIT — Copyright (c) 2026 Luke Liu. See [LICENSE](LICENSE).
