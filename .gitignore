@@ -1,0 +1,21 @@
+# Never commit secrets, recordings or runtime data.
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+config.toml
+*.key
+*.jks
+*.keystore
+secrets/
+data/
+calls/
+recordings/
+*.wav
+*.raw
+*.log
+*.bak*
+.env
