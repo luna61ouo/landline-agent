@@ -3,7 +3,7 @@
 **Let an AI make phone calls for you through your own landline – and you press the button that lets it dial.**
 讓 AI 用你家的市話幫你打電話；要不要撥，由你按。
 
-[![Intro video](docs/media/intro.jpg)](#how-it-works)
+[![Intro video (30 s)](docs/media/intro.jpg)](docs/media/intro-30s.mp4)
 
 Book a table, ask about opening hours, check whether a shop has something in stock. Your AI (or any script) hands over a short brief; a voice model makes the call in natural Taiwanese Mandarin; you get the transcript and the recording back.
 
