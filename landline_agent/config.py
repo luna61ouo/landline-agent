@@ -34,6 +34,8 @@ class Config:
     dial_authority: frozenset[str]
     session_extension: frozenset[str]
     raw: dict
+    nudge_after: float | None = 5.0      # callee finished, assistant still silent this long -> nudge
+    quiet_after: float | None = 8.0      # line silent this long after the assistant spoke -> goodbye
 
     @property
     def calls_dir(self) -> Path:
@@ -57,6 +59,17 @@ class Config:
 
 def _path(base: Path, v: str) -> Path:
     return (base / os.path.expanduser(v)).resolve()
+
+
+def _opt_float(sec: dict, key: str, default):
+    """Seconds; 0 or a missing key in a section that sets it to 0 turns the feature off."""
+    v = sec.get(key, default)
+    if v is None:
+        return None
+    v = float(v)
+    if v < 0:
+        raise ValueError(f"[call].{key} must be >= 0")
+    return v or None
 
 
 def load(path: str | Path) -> Config:
@@ -93,4 +106,6 @@ def load(path: str | Path) -> Config:
         dial_authority=frozenset(plug.get("dial_authority", [])),
         session_extension=frozenset(plug.get("session_extension", [])),
         raw=raw,
+        nudge_after=_opt_float(raw.get("call", {}), "nudge_after_sec", 5.0),
+        quiet_after=_opt_float(raw.get("call", {}), "quiet_hangup_sec", 8.0),
     )

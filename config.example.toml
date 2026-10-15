@@ -29,6 +29,11 @@ bind_brief = true             # after approval the brief cannot change (a revisi
 ask_ttl_sec = 600             # how long a request waits for a human
 use_ttl_sec = 600
 
+[call]
+nudge_after_sec = 5           # the callee finished talking and the assistant is still silent -> remind it (0 = off)
+quiet_hangup_sec = 8          # a callee who never says a word: say goodbye and hang up after this long (0 = off)
+                              # (once the callee has spoken, the pause allowed is at least 30 s: "let me check...")
+
 [prompts]
 locale = "zh-TW"
 

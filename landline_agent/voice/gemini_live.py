@@ -9,6 +9,9 @@ Behaviour carried over from the original system, each item learned on real calls
   - Waiting for a human (transfer / hold music) mutes the assistant until the
     callee speaks for 0.3 s; prompts alone could not stop it talking to silence.
   - Optional nudge when the assistant goes quiet after a question.
+  - Quiet callee: the line stays silent after the assistant finished -> it is
+    told to say goodbye and hang up; still nothing a while later -> the system
+    hangs up.  (Without this a silent callee kept the call open until max_sec.)
   - Interruptions drop the queued speech at once.
 """
 from __future__ import annotations
@@ -30,8 +33,30 @@ CWC_TRIGGER, CWC_TARGET = 10000, 6000   # sliding context window: long calls sta
 # Texts sent to the model (Taiwanese Mandarin, like the hard rules).
 NUDGE_TEXT = "（對方剛剛問了你問題、正在等你回答。現在就回答；資料裡沒有的就說不知道。）"
 PREGREET_TAIL = "（這段開場白會在對方接起來的瞬間播放，所以要一口氣講完：打招呼、說明來意、接著問第一個問題，中間不要停下來等對方。）"
+QUIET_TEXT = "（對方已經好一陣子沒有出聲。請用一句話禮貌道別，然後呼叫 end_call 掛斷。）"
+QUIET_GRACE = 10.0          # after the goodbye prompt, the system hangs up if the call is still open
+QUIET_AFTER_TALK = 30.0     # once the callee has spoken, a pause may be "let me check" - wait much longer
 KICK_TEXT = ("（電話已接通。如果剛剛是真人在講話、或一直沒人講話，現在由你打招呼、說明來意；"
              "如果聽到的是語音選單或錄音，繼續保持安靜。）")
+
+
+def quiet_step(now: float, ai_last: float, last_voiced: float, prompted_at: float,
+               quiet_after: float | None, *, answered: bool, speaking: bool, waiting: bool,
+               callee_spoke: bool = False) -> str | None:
+    """Pure decision for a silent line: None, "prompt" (ask for a goodbye) or "hangup".
+
+    Counts from whichever was later: the end of the assistant's speech or the
+    callee's last voiced audio.  quiet_after applies to a callee who never said
+    a word; once they have spoken, the limit is at least QUIET_AFTER_TALK.  Never fires while the assistant is talking,
+    before pick-up, or while waiting for a human on hold."""
+    if not quiet_after or not answered or speaking or waiting or ai_last == 0.0:
+        return None
+    if prompted_at:
+        if last_voiced > prompted_at:
+            return None      # the callee spoke after the prompt; the conversation goes on
+        return "hangup" if now - max(prompted_at, ai_last) > QUIET_GRACE else None
+    limit = max(quiet_after, QUIET_AFTER_TALK) if callee_spoke else quiet_after
+    return "prompt" if now - max(ai_last, last_voiced) > limit else None
 
 
 def _decl(tool: dict) -> types.FunctionDeclaration:
@@ -77,6 +102,7 @@ class GeminiLive:
 
     async def run(self, line, instructions: str, log, tools, max_sec: int = 300, nudge_after: float | None = None,
                   inject: asyncio.Queue | None = None, silence_kick: float = SILENCE_KICK,
+                  quiet_after: float | None = None,
                   pregreet: bool = True, tool_handlers: dict | None = None) -> tuple[str, str]:
         """Run one connected call.  Returns (end reason, who ended it).
 
@@ -85,7 +111,7 @@ class GeminiLive:
         log.prompt("assistant", instructions)
         st = {"rs_in": None, "rs_out": None, "voiced_ms": 0, "last_voiced": 0.0, "waiting": False,
               "wait_voiced": 0, "ai_last": 0.0, "nudged_for": 0.0, "t0": 0.0, "held": [] if pregreet else None,
-              "opened": False}
+              "opened": False, "quiet_at": 0.0}
 
         def ai_head():
             return log.now() + line.queued_sec()
@@ -138,6 +164,18 @@ class GeminiLive:
                         st["nudged_for"] = st["last_voiced"]
                         log.event("nudge", silent_sec=round(now - st["last_voiced"], 1))
                         await session.send_realtime_input(text=NUDGE_TEXT)
+                    q = quiet_step(now, st["ai_last"], st["last_voiced"], st["quiet_at"], quiet_after,
+                                   answered=line.answered.is_set(), speaking=line.queued_sec() > 0,
+                                   waiting=st["waiting"], callee_spoke=st["voiced_ms"] >= 300)
+                    if q == "prompt":
+                        st["quiet_at"] = now
+                        log.event("quiet_prompt", silent_sec=round(now - max(st["ai_last"], st["last_voiced"]), 1))
+                        await session.send_realtime_input(text=QUIET_TEXT)
+                    elif q == "hangup":
+                        log.note("system", "callee stayed silent, hanging up")
+                        return "callee_silent", "system"
+                    elif st["quiet_at"] and st["last_voiced"] > st["quiet_at"]:
+                        st["quiet_at"] = 0.0
 
             async def injector():
                 while True:

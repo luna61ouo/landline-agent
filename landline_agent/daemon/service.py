@@ -209,6 +209,8 @@ class AgentService:
             line = call_opts.pop("line", None) or self._make_line()
             job.line = line
             try:
+                call_opts.setdefault("nudge_after", self.cfg.nudge_after)
+                call_opts.setdefault("quiet_after", self.cfg.quiet_after)
                 log = await place_call(self.cfg, permit, job.req, line=line, **call_opts)
                 m = log.meta
                 job.result = {"end_reason": m.get("end_reason"), "ended_by": m.get("ended_by"),
