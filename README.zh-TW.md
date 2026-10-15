@@ -8,6 +8,8 @@
 
 ▶ **[看 30 秒介紹影片（有聲音）](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)**（MP4，5 MB）
 
+> 📞 **只需要電話系統、不需要 AI？** 單獨用 [landline-hub](https://github.com/luna61ouo/landline-hub) 就好：市話來電響到手機、總機把分機轉給同事、用手機透過市話撥出。
+
 訂位、問營業時間、問店裡有沒有某樣東西。你的 AI（或任何程式）交出一份簡短的簡報，語音模型用自然的台灣華語打這通電話，結束後把逐字稿和錄音交回給你。
 
 它建在 [landline-hub](https://github.com/luna61ouo/landline-hub) 上，電話線歸 hub 管。語音模型是 Gemini Live。

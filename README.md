@@ -8,6 +8,8 @@
 
 ▶ **[Watch the 30-second intro with sound](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)** (MP4, 5 MB)
 
+> 📞 **Only need the phone system, no AI?** Use [landline-hub](https://github.com/luna61ouo/landline-hub) on its own: calls to your landline ring your mobile, an auto-attendant routes extensions to your team, and you can dial out through the landline from your phone.
+
 Book a table, ask about opening hours, check whether a shop has something in stock. Your AI (or any script) hands over a short brief; a voice model makes the call in natural Taiwanese Mandarin; you get the transcript and the recording back.
 
 It runs on top of [landline-hub](https://github.com/luna61ouo/landline-hub), which owns the phone line. Voice model: Gemini Live.
