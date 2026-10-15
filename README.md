@@ -1,11 +1,12 @@
 # landline-agent
 
+**English** | [繁體中文](README.zh-TW.md)
+
 **Let an AI make phone calls for you through your own landline – and you press the button that lets it dial.**
-讓 AI 用你家的市話幫你打電話；要不要撥，由你按。
 
 [![Intro (first 10 seconds)](docs/media/preview.gif)](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)
 
-▶ **[Watch the 30-second intro with sound](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)** (MP4, 5 MB) · 30 秒介紹影片（有聲音）
+▶ **[Watch the 30-second intro with sound](https://github.com/luna61ouo/landline-agent/raw/main/docs/media/intro-30s.mp4)** (MP4, 5 MB)
 
 Book a table, ask about opening hours, check whether a shop has something in stock. Your AI (or any script) hands over a short brief; a voice model makes the call in natural Taiwanese Mandarin; you get the transcript and the recording back.
 
