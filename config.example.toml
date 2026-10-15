@@ -1,0 +1,38 @@
+# landline-agent configuration.  Copy to config.toml and edit.
+
+[principal]
+name = "Alex"                 # "you are Alex's assistant" in the hard rules; also used in policies
+
+[hub]
+url = "http://127.0.0.1:8910"
+token_file = "data/hub-token" # from: landline-hub pair --name my-agent --role agent
+
+[voice]
+provider = "gemini-live"
+model = "gemini-3.8-live"
+voice = "Zephyr"
+api_key_file = "data/gemini-key"
+
+[server]
+host = "127.0.0.1"
+port = 8920                   # requester API (for your AI / scripts)
+approver_socket = "data/approver.sock"   # approver API (for approval front-ends only)
+data_dir = "data"
+
+[allowlist]
+# ⚠️ Keep this on.  When it is off, approval is switched off too and EVERY
+# requested call is dialled automatically, without any human confirming it.
+enabled = true
+
+[approval]
+bind_brief = true             # after approval the brief cannot change (a revision needs a new approval)
+ask_ttl_sec = 600             # how long a request waits for a human
+use_ttl_sec = 600
+
+[prompts]
+locale = "zh-TW"
+
+[plugins]
+enabled = []
+dial_authority = []           # plugins allowed to obtain dial permits on their own
+session_extension = []        # plugins allowed to add tools / replace instructions / inject text
