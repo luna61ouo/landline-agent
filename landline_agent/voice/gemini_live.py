@@ -22,6 +22,7 @@ from google import genai
 from google.genai import types
 
 from ..audio import audioop
+from .noise_gate import NoiseGate
 from ..domain.prompt import HANGUP_HINT  # noqa: F401  (re-exported for callers that build prompts)
 
 IN_GAIN = 4.0               # analog lines are quiet
@@ -38,6 +39,16 @@ QUIET_GRACE = 10.0          # after the goodbye prompt, the system hangs up if t
 QUIET_AFTER_TALK = 30.0     # once the callee has spoken, a pause may be "let me check" - wait much longer
 KICK_TEXT = ("（電話已接通。如果剛剛是真人在講話、或一直沒人講話，現在由你打招呼、說明來意；"
              "如果聽到的是語音選單或錄音，繼續保持安靜。）")
+
+
+MIN_HEARD_CHARS = 2        # recognised characters before we believe the callee said something
+
+
+def word_chars(text: str) -> int:
+    """Characters that look like words (CJK or letters); tags like <noise> do not count."""
+    import re
+    text = re.sub(r"<[^>]*>|\{[^}]*\}|\[[^\]]*\]", "", text)
+    return sum(1 for c in text if c.isalpha())
 
 
 def quiet_step(now: float, ai_last: float, last_voiced: float, prompted_at: float,
@@ -98,6 +109,10 @@ class GeminiLive:
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
             tools=[types.Tool(function_declarations=[_decl(t) for t in tools])],
+            # background noise must not count as the callee starting to talk
+            realtime_input_config=types.RealtimeInputConfig(
+                automatic_activity_detection=types.AutomaticActivityDetection(
+                    start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_LOW)),
         )
 
     async def run(self, line, instructions: str, log, tools, max_sec: int = 300, nudge_after: float | None = None,
@@ -109,9 +124,10 @@ class GeminiLive:
         inject / tool_handlers are only for operator-authorized plugins; the
         request API cannot reach them."""
         log.prompt("assistant", instructions)
-        st = {"rs_in": None, "rs_out": None, "voiced_ms": 0, "last_voiced": 0.0, "waiting": False,
+        st = {"rs_in": None, "rs_out": None, "voiced_ms": 0, "last_voiced": 0.0, "heard_at": 0.0, "heard_chars": 0, "nudge_chars": 0, "callee_turn": False, "waiting": False,
               "wait_voiced": 0, "ai_last": 0.0, "nudged_for": 0.0, "t0": 0.0, "held": [] if pregreet else None,
               "opened": False, "quiet_at": 0.0}
+        gate = NoiseGate(min_rms=CALLEE_VOICE_RMS)
 
         def ai_head():
             return log.now() + line.queued_sec()
@@ -158,23 +174,26 @@ class GeminiLive:
                     if not line.answered.is_set() and now > RING_LIMIT:
                         log.note("system", f"no answer after {RING_LIMIT} s")
                         return "no_answer", "system"
+                    # nudge and the silence logic go by what the recogniser heard as words, not by
+                    # loudness: background voices and music are loud but rarely come out as words
                     if (nudge_after and not st["waiting"] and line.queued_sec() == 0
-                            and st["last_voiced"] > st["ai_last"] and st["last_voiced"] != st["nudged_for"]
-                            and now - st["last_voiced"] > nudge_after):
-                        st["nudged_for"] = st["last_voiced"]
-                        log.event("nudge", silent_sec=round(now - st["last_voiced"], 1))
+                            and not st["callee_turn"] and st["heard_chars"] > st["nudge_chars"]
+                            and st["heard_at"] > st["ai_last"] and st["heard_at"] != st["nudged_for"]
+                            and now - st["heard_at"] > nudge_after):
+                        st["nudged_for"], st["nudge_chars"] = st["heard_at"], st["heard_chars"]
+                        log.event("nudge", silent_sec=round(now - st["heard_at"], 1))
                         await session.send_realtime_input(text=NUDGE_TEXT)
-                    q = quiet_step(now, st["ai_last"], st["last_voiced"], st["quiet_at"], quiet_after,
-                                   answered=line.answered.is_set(), speaking=line.queued_sec() > 0,
-                                   waiting=st["waiting"], callee_spoke=st["voiced_ms"] >= 300)
+                    q = quiet_step(now, st["ai_last"], st["heard_at"], st["quiet_at"], quiet_after,
+                                   answered=line.answered.is_set(), speaking=line.queued_sec() > 0 or st["callee_turn"],
+                                   waiting=st["waiting"], callee_spoke=st["heard_chars"] >= MIN_HEARD_CHARS)
                     if q == "prompt":
                         st["quiet_at"] = now
-                        log.event("quiet_prompt", silent_sec=round(now - max(st["ai_last"], st["last_voiced"]), 1))
+                        log.event("quiet_prompt", silent_sec=round(now - max(st["ai_last"], st["heard_at"]), 1))
                         await session.send_realtime_input(text=QUIET_TEXT)
                     elif q == "hangup":
                         log.note("system", "callee stayed silent, hanging up")
                         return "callee_silent", "system"
-                    elif st["quiet_at"] and st["last_voiced"] > st["quiet_at"]:
+                    elif st["quiet_at"] and st["heard_at"] > st["quiet_at"]:
                         st["quiet_at"] = 0.0
 
             async def injector():
@@ -190,7 +209,8 @@ class GeminiLive:
                     except asyncio.TimeoutError:
                         continue
                     pcm8 = audioop.mul(raw, 2, IN_GAIN)
-                    if audioop.rms(pcm8, 2) > CALLEE_VOICE_RMS:
+                    passes = gate.feed(audioop.rms(pcm8, 2))
+                    if gate.loud:
                         st["voiced_ms"] += len(pcm8) // 16
                         st["last_voiced"] = log.now()
                         if st["waiting"]:
@@ -200,9 +220,11 @@ class GeminiLive:
                                 log.event("wait_end")
                                 log.note("ai", "callee spoke, unmuted")
                     pcm16, st["rs_in"] = audioop.ratecv(pcm8, 2, 1, 8000, 16000, st["rs_in"])
-                    log.audio("them", pcm16)
+                    log.audio("them", pcm16)          # the black box keeps what was really on the line
                     if not st["opened"] and pregreet:
                         continue      # the "hello" that opened the gate is not sent: the greeting is already playing
+                    if not passes:
+                        pcm16 = b"\0" * len(pcm16)   # background only: the model hears silence
                     await session.send_realtime_input(audio=types.Blob(data=pcm16, mime_type="audio/pcm;rate=16000"))
                 return "hangup", line.ended_by or "callee"
 
@@ -211,6 +233,12 @@ class GeminiLive:
                     async for m in session.receive():
                         if m.usage_metadata:
                             log.add_usage(_usage(m.usage_metadata), "ai")
+                        if m.voice_activity and m.voice_activity.voice_activity_type:
+                            # the model's own view of "the callee is talking": transcripts only arrive
+                            # once a whole turn is over, far too late for the silence logic
+                            start = m.voice_activity.voice_activity_type == types.VoiceActivityType.ACTIVITY_START
+                            st["callee_turn"], st["heard_at"] = start, log.now()
+                            log.event("callee_activity", start=start)
                         if m.go_away:
                             log.event("go_away", time_left=m.go_away.time_left)
                         if m.tool_call:
@@ -254,6 +282,8 @@ class GeminiLive:
                                     st["ai_last"] = ai_head()
                         if sc.input_transcription and sc.input_transcription.text:
                             log.transcript("them", sc.input_transcription.text)
+                            n = word_chars(sc.input_transcription.text)
+                            st["heard_chars"] += n
                         if sc.output_transcription and sc.output_transcription.text:
                             log.transcript("ai", sc.output_transcription.text)
                         if sc.turn_complete:
