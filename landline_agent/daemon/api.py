@@ -6,6 +6,7 @@ Requester API (TCP, requester token) - for the AI or any program:
   GET  /v1/calls/{id}/events    SSE
   PATCH /v1/calls/{id}          {brief}  revise while awaiting approval
   POST /v1/calls/{id}/cancel
+  POST /v1/calls/{id}/say       {text}   supervisor note into a live call
 
 Approver API (unix socket, approver token) - only for approval front-ends:
   GET  /v1/approvals            pending tickets (number, who, why, full brief)
@@ -92,7 +93,13 @@ def requester_app(svc: AgentService, token: str) -> web.Application:
     app.router.add_get("/v1/calls/{cid}", get)
     app.router.add_get("/v1/calls/{cid}/events", events)
     app.router.add_post("/v1/calls/{cid}/cancel", cancel)
+    async def say(request):
+        body = await request.json()
+        r = svc.say(request.match_info["cid"], body.get("text", ""))
+        return web.json_response(r, status=200 if r["ok"] else 409)
+
     app.router.add_patch("/v1/calls/{cid}", revise)
+    app.router.add_post("/v1/calls/{cid}/say", say)
     return app
 
 

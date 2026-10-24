@@ -126,6 +126,7 @@ curl -H "Authorization: Bearer $(cat data/requester-token)" \
 | `GET /v1/calls/{id}/events` | server-sent events for this call |
 | `PATCH /v1/calls/{id}` `{brief}` | revise while waiting for approval (with `bind_brief`, this re-issues the ticket) |
 | `POST /v1/calls/{id}/cancel` | |
+| `POST /v1/calls/{id}/say` `{text}` | while the call is live: a supervisor note to the voice model (it is told not to read it out) – lets the requester correct a call in progress |
 
 **Writing a brief.** Plain text, in the language of the call. A first line `【任務】訂位` picks the matching task policy from `landline_agent/policies/<locale>/` (booking is included); `【語氣】正式` switches to the formal speaking style. Put in everything the model may say – your name, the date, acceptable alternatives – because it has no way to look anything up.
 

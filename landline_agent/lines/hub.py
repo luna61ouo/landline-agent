@@ -27,6 +27,7 @@ class HubLine:
         self.fail_reason: str | None = None
         self.answered = asyncio.Event()      # the callee picked up (as far as the hub can tell)
         self.answer_how = ""
+        self.recalled = asyncio.Event()      # 10-24: the hub took "answered" back (it was still ringing)
         self.callee_talking = False
         self.call_id: str | None = None
         self._session: aiohttp.ClientSession | None = None
@@ -83,6 +84,10 @@ class HubLine:
                         self.answer_how = ev.get("how", "")
                         self.callee_talking = bool(ev.get("talking"))
                         self.answered.set()
+                    elif t == "callee_not_answered":
+                        self.answered.clear()
+                        self.answer_how = ""
+                        self.recalled.set()
                     elif t == "ended":
                         reason = ev.get("reason", "")
                         if reason.startswith("not_connected"):

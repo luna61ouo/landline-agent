@@ -21,6 +21,10 @@ async def place_call(cfg: Config, permit: DialPermit, req: ValidatedCallRequest,
         instructions = prompt_mod.build(req.brief, cfg.prompt_kit(), cfg.principal)
     if line is None:
         line = HubLine(cfg.hub_url, cfg.secret(cfg.hub_token_file), log=lambda t, **f: log.event(t, **f))
+    elif isinstance(line, HubLine):
+        # the daemon builds the line before the record exists; without this the hub's
+        # gate events (each ring, opening, recall) never reached the black box (10-24)
+        line.log = lambda t, **f: log.event(t, **f)
     reason, by = "unknown", ""
     try:
         if not await line.dial(permit):

@@ -30,6 +30,8 @@ class CallJob:
     result: dict | None = None
     task: asyncio.Task | None = None
     line: object | None = None
+    inject: asyncio.Queue | None = None
+    record: str | None = None
 
 
 class AgentService:
@@ -134,6 +136,20 @@ class AgentService:
             return {"ok": True, "state": "hanging_up"}
         return {"ok": False, "error": f"cannot cancel in state {job.state}"}
 
+    def say(self, call_id: str, text: str) -> dict:
+        """Supervisor note into a live call (2026-10-24): the requester already
+        wrote the whole brief, so a mid-call correction is no new power.  It is
+        sent to the voice model as an aside it must not read out."""
+        job = self.jobs.get(call_id)
+        text = " ".join(str(text).split())[:400]
+        if not job or job.state != "calling" or job.inject is None:
+            return {"ok": False, "error": "call is not live"}
+        if not text:
+            return {"ok": False, "error": "empty text"}
+        job.inject.put_nowait(f"（後台主管提示，只給你看、不要念出來：{text}）")
+        self.log("supervisor_say", call=call_id, chars=len(text))
+        return {"ok": True}
+
     # ------------------------------------------------------------ approver side
     @staticmethod
     def _ticket_view(t: ap.Ticket) -> dict:
@@ -211,6 +227,8 @@ class AgentService:
             try:
                 call_opts.setdefault("nudge_after", self.cfg.nudge_after)
                 call_opts.setdefault("quiet_after", self.cfg.quiet_after)
+                if "inject" not in call_opts:
+                    call_opts["inject"] = job.inject = asyncio.Queue()
                 log = await place_call(self.cfg, permit, job.req, line=line, **call_opts)
                 m = log.meta
                 job.result = {"end_reason": m.get("end_reason"), "ended_by": m.get("ended_by"),
@@ -219,7 +237,7 @@ class AgentService:
             except Exception as e:
                 job.result = {"end_reason": "error", "error": repr(e)}
             job.state = "done"
-            job.line = None
+            job.line = job.inject = None
             self._job_event(job, end_reason=job.result.get("end_reason"))
             with (self.cfg.data_dir / "requests.jsonl").open("a", encoding="utf-8") as f:
                 f.write(json.dumps({"call_id": job.call_id, "number": job.req.number, "label": job.req.label,

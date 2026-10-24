@@ -126,6 +126,7 @@ curl -H "Authorization: Bearer $(cat data/requester-token)" \
 | `GET /v1/calls/{id}/events` | 這通電話的 server-sent events |
 | `PATCH /v1/calls/{id}` `{brief}` | 等核准時修改簡報（開著 `bind_brief` 會重開核准單） |
 | `POST /v1/calls/{id}/cancel` | |
+| `POST /v1/calls/{id}/say` `{text}` | 通話進行中：給語音模型一句主管提示（會告訴它不要念出來），讓請求端在通話中修正方向 |
 
 **怎麼寫簡報。** 純文字，用這通電話要講的語言寫。第一行寫 `【任務】訂位`，會套用 `landline_agent/policies/<locale>/` 裡對應的任務準則（內建訂位）；寫 `【語氣】正式` 會改用正式語氣。模型可能需要說的都要寫進去（你的名字、日期、可以接受的替代方案），因為它沒辦法查任何東西。
 

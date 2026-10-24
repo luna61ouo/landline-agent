@@ -39,6 +39,27 @@ QUIET_GRACE = 10.0          # after the goodbye prompt, the system hangs up if t
 QUIET_AFTER_TALK = 30.0     # once the callee has spoken, a pause may be "let me check" - wait much longer
 KICK_TEXT = ("（電話已接通。如果剛剛是真人在講話、或一直沒人講話，現在由你打招呼、說明來意；"
              "如果聽到的是語音選單或錄音，繼續保持安靜。）")
+RECALL_TEXT = ("（系統更正：剛才其實還在響鈴，對方沒有接起來，也沒聽到你說的話。"
+               "現在保持安靜，不要說話，等系統通知對方接起來。）")
+REANSWER_TEXT = ("（對方現在真的接起來了。剛才的話對方沒聽到：如果對方先開口就回應他，"
+                 "否則現在簡短打招呼、說明來意、問第一個問題。）")
+
+# Don't talk over the callee's "hello" (10-24: the clinic answered "廣慈您好" and the
+# pre-greeting started in the same instant, both talked at once).
+GREET_AFTER_QUIET = 0.6     # the callee's opening words are over after this much quiet
+GREET_WAIT_INFERRED = 1.5   # pick-up only inferred: give them this long to say hello first
+GREET_WAIT_MAX = 5.0        # background noise must not keep the greeting waiting forever
+INFERRED = ("ringback_stopped", "no_tone", "ring_cut")
+
+
+def greet_ready(now: float, t_ans: float, last_voiced: float, heard: bool, inferred: bool) -> bool:
+    """Pure decision: may the pre-greeting start now?  heard = the callee has said something
+    since pick-up (or was talking when the gate opened)."""
+    if now - t_ans >= GREET_WAIT_MAX:
+        return True
+    if heard:
+        return now - last_voiced >= GREET_AFTER_QUIET
+    return now - t_ans >= (GREET_WAIT_INFERRED if inferred else 0.0)
 
 
 MIN_HEARD_CHARS = 2        # recognised characters before we believe the callee said something
@@ -155,8 +176,20 @@ class GeminiLive:
             async def opener():
                 """When the callee picks up, play the pre-generated greeting."""
                 await line.answered.wait()
-                st["opened"] = True
                 log.note("system", f"callee answered ({line.answer_how})")
+                if pregreet:
+                    t_ans, heard = log.now(), bool(line.callee_talking)
+                    while True:
+                        now = log.now()
+                        heard = heard or st["last_voiced"] > t_ans
+                        # the "answered" event arrives a moment before the callee's audio: count
+                        # a callee who was talking at pick-up as voiced at least until then
+                        last = max(st["last_voiced"], t_ans) if heard else st["last_voiced"]
+                        if greet_ready(now, t_ans, last, heard, line.answer_how in INFERRED):
+                            break
+                        await asyncio.sleep(0.05)
+                    log.event("greet_wait", sec=round(log.now() - t_ans, 2), heard=heard, how=line.answer_how)
+                st["opened"] = True
                 if pregreet:
                     held, st["held"] = st["held"], None
                     log.event("pregreet_play", sec=round(sum(len(c) for c in held) / 16000, 2))
@@ -195,6 +228,28 @@ class GeminiLive:
                         return "callee_silent", "system"
                     elif st["quiet_at"] and st["heard_at"] > st["quiet_at"]:
                         st["quiet_at"] = 0.0
+
+            async def recaller():
+                """10-24: the hub opened on an inference and the ring came back.  Stop talking
+                into the ringback, mute until the real pick-up, then start over."""
+                recalled = getattr(line, "recalled", None)
+                if recalled is None:
+                    return
+                while True:
+                    await recalled.wait()
+                    recalled.clear()
+                    log.event("recalled", dropped_sec=round(line.queued_sec(), 2))
+                    log.note("system", "still ringing - the pick-up was misjudged; assistant muted")
+                    line.clear()
+                    st["waiting"], st["wait_voiced"] = True, -10**9   # only the real pick-up unmutes
+                    await session.send_realtime_input(text=RECALL_TEXT)
+                    await line.answered.wait()
+                    if line.ended.is_set():
+                        return
+                    st["waiting"], st["heard_at"], st["ai_last"] = False, log.now(), log.now()
+                    log.event("reanswered", how=line.answer_how)
+                    log.note("system", f"callee answered ({line.answer_how})")
+                    await session.send_realtime_input(text=REANSWER_TEXT)
 
             async def injector():
                 while True:
@@ -291,7 +346,7 @@ class GeminiLive:
                             log.ai_turn_end("turn_complete")
 
             tasks = {asyncio.create_task(uplink()), asyncio.create_task(downlink()), asyncio.create_task(watchdog())}
-            aux = [asyncio.create_task(kickoff()), asyncio.create_task(opener())]
+            aux = [asyncio.create_task(kickoff()), asyncio.create_task(opener()), asyncio.create_task(recaller())]
             if inject is not None:
                 aux.append(asyncio.create_task(injector()))
             try:
